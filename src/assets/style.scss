@@ -1,0 +1,63 @@
+/* Алиасы токенов дизайн-системы DNS для экранов CRM */
+:root {
+	--crm-bg:          var(--background-primary, #f7f7f7);
+	--crm-panel:       var(--background-secondary, #fff);
+	--crm-line:        var(--background-neutral-light, #eee);
+	--crm-ink:         var(--text-primary, #333);
+	--crm-ink2:        var(--text-secondary, #4e4e4e);
+	--crm-ink3:        var(--text-tertiary, #7d7c7c);
+	--crm-orange:      var(--controls-selected, #fc8507);
+	--crm-orange-soft: var(--background-brand-light, #fff5e9);
+	--crm-orange-line: #ffd9bd;
+	--crm-navy:        var(--background-primary-inverse, #333);
+	--crm-green:       var(--background-success-main, #00be70);
+	--crm-green-bg:    var(--background-success-light, #ebffed);
+	--crm-red:         var(--background-error-main, #ff544b);
+	--crm-red-bg:      var(--background-error-light, #fff0ee);
+	--crm-blue:        var(--background-info-dark, #007de3);
+	--crm-blue-bg:     var(--background-info-light, #e9f6fc);
+	--crm-yellow-bg:   var(--background-warning-light, #fff7da);
+	--crm-ai:          var(--icon-info-purple, #733aff);
+	--crm-ai-bg:       #f4efff;
+	--crm-ai-line:     #e2d6fb;
+	--crm-star:        #f5a623;
+	--crm-radius:      12px;
+	--crm-shadow-lg:   0 20px 60px rgba(16, 24, 40, 0.25);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+	height: 100%;
+}
+
+body {
+	margin:      0;
+	font-family: var(--font-family-paragraph-desktop, 'PT Sans'), sans-serif;
+	font-size:   14px;
+	color:       var(--crm-ink);
+	background:  var(--crm-bg);
+	overflow:    hidden;
+}
+
+button {
+	font-family: inherit;
+}
+
+::-webkit-scrollbar {
+	width:  9px;
+	height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+	background:    #ccd4df;
+	border-radius: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}

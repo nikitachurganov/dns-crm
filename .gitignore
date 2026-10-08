@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.claude/
+vite.config.mjs
+vite.config.d.mts
+*.tsbuildinfo
