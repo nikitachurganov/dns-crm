@@ -29,24 +29,18 @@ const orderOptions = computed(() => (store.chat
 	? store.ordersOf(store.chat.client_id).map((o) => `${o.order_id} · ${o.items} · ${money(o.amount)}`)
 	: []));
 
-/** Проблемный заказ или первый в списке */
+/** Активный заказ из карточки справа */
 const defaultOrder = computed(() => {
-	if (!store.chat) {
-		return '';
-	}
+	const id = store.activeOrder?.order_id;
 
-	const orders = store.ordersOf(store.chat.client_id);
-	const target = orders.find((o) => 'проблема' === o.status) ?? orders[0];
-	const idx    = target ? orders.indexOf(target) : -1;
-
-	return orderOptions.value[idx] ?? '';
+	return orderOptions.value.find((o) => id && o.startsWith(id)) ?? orderOptions.value[0] ?? '';
 });
 
 type ActionConfig = {title: string; note: string; fields: () => Field[]};
 
+const SERVICE_CENTERS = ['СЦ DNS, Уссурийск (приём в любом магазине)', 'СЦ DNS, Хабаровск', 'Авторизованный СЦ, Владивосток'];
+
 const CONFIG: Record<ActionType, ActionConfig> = {
-	transfer: {title: '', note: '', fields: () => []},
-	service:  {title: '', note: '', fields: () => []},
 	return: {
 		title:  'Оформить возврат',
 		note:   'Возврат средств — до 5 дней после приёмки. Заявление за клиента формируется автоматически, подпись — у курьера.',
@@ -60,7 +54,7 @@ const CONFIG: Record<ActionType, ActionConfig> = {
 		title:  'Оформить обмен',
 		note:   'Товар не использовался, чек есть — обмен без экспертизы, в магазине займёт ~5 минут.',
 		fields: () => [
-			{key: 'order', label: 'Заказ', options: orderOptions.value, value: orderOptions.value[0] ?? ''},
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
 			{key: 'swap', label: 'Товар на замену', options: ['JBL Tune 520BT · 3 990 ₽ (без доплаты)', 'JBL Tune 720BT · 5 490 ₽ (доплата 1 500 ₽)'], value: 'JBL Tune 520BT · 3 990 ₽ (без доплаты)'},
 			{key: 'way', label: 'Где обменять', options: ['ТРЦ Острова (любимый магазин)', 'Любой магазин DNS'], value: 'ТРЦ Острова (любимый магазин)'},
 		],
@@ -69,30 +63,54 @@ const CONFIG: Record<ActionType, ActionConfig> = {
 		title:  'Гарантийный ремонт',
 		note:   'Диагностика — до 3 рабочих дней. Чек не нужен: покупка подтверждается по номеру заказа.',
 		fields: () => [
-			{key: 'order', label: 'Заказ', options: orderOptions.value, value: orderOptions.value[0] ?? ''},
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
 			{key: 'way', label: 'Сервисный центр', options: ['СЦ DNS, Уссурийск (приём в любом магазине)', 'Авторизованный СЦ Dyson, Владивосток'], value: 'СЦ DNS, Уссурийск (приём в любом магазине)'},
 			{key: 'time', label: 'Подменный товар', options: ['Не требуется', 'Запросить подменный пылесос'], value: 'Не требуется'},
 		],
 	},
-};
-
-CONFIG.transfer = {
-	title:  'Перевести на другого оператора / линию',
-	note:   'Клиент останется в этом чате, история переписки и AI-контекст перейдут к новому оператору.',
-	fields: () => [
-		{key: 'way', label: 'Куда перевести', options: ['Линия: гарантия и сервис', 'Линия: доставка', 'Линия: оплата и кредиты', 'Старший смены', 'Оператор: Сергей В.'], value: 'Линия: гарантия и сервис'},
-		{key: 'time', label: 'Приоритет', options: ['Обычный', 'Срочно'], value: 'Обычный'},
-	],
-};
-
-CONFIG.service = {
-	title:  'Создать заявку в СЦ',
-	note:   'Заявка уйдёт в сервисный центр, клиент получит номер заявки и адрес приёма в чате.',
-	fields: () => [
-		{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
-		{key: 'way', label: 'Сервисный центр', options: ['СЦ DNS, Уссурийск (приём в любом магазине)', 'СЦ DNS, Хабаровск', 'Авторизованный СЦ, Владивосток'], value: 'СЦ DNS, Уссурийск (приём в любом магазине)'},
-		{key: 'time', label: 'Тип обращения', options: ['Диагностика', 'Гарантийный ремонт', 'Замена товара'], value: 'Диагностика'},
-	],
+	transfer: {
+		title:  'Перевести на другого оператора',
+		note:   'Клиент останется в этом чате, история переписки и AI-контекст перейдут к новому оператору.',
+		fields: () => [
+			{key: 'way', label: 'Куда перевести', options: ['Линия: гарантия и сервис', 'Линия: доставка', 'Линия: оплата и кредиты', 'Старший смены', 'Оператор: Сергей В.'], value: 'Линия: гарантия и сервис'},
+			{key: 'time', label: 'Приоритет', options: ['Обычный', 'Срочно'], value: 'Обычный'},
+		],
+	},
+	service: {
+		title:  'Создать заявку в СЦ',
+		note:   'Заявка уйдёт в сервисный центр, клиент получит номер заявки и адрес приёма в чате.',
+		fields: () => [
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
+			{key: 'way', label: 'Сервисный центр', options: SERVICE_CENTERS, value: SERVICE_CENTERS[0] ?? ''},
+			{key: 'time', label: 'Тип обращения', options: ['Диагностика', 'Гарантийный ремонт', 'Замена товара'], value: 'Диагностика'},
+		],
+	},
+	reschedule: {
+		title:  'Изменить дату и время доставки',
+		note:   'Курьер позвонит за час до приезда. Клиент получит уведомление с новой датой.',
+		fields: () => [
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
+			{key: 'way', label: 'Дата', options: ['11.07.2026, суббота', '12.07.2026, воскресенье', '13.07.2026, понедельник', '14.07.2026, вторник'], value: '11.07.2026, суббота'},
+			{key: 'time', label: 'Интервал', options: ['10:00–14:00', '14:00–18:00', '18:00–21:00'], value: '14:00–18:00'},
+		],
+	},
+	cancel: {
+		title:  'Отменить заказ',
+		note:   'Заказ будет отменён, деньги вернутся тем же способом в течение 5 рабочих дней. Действие нельзя отменить.',
+		fields: () => [
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
+			{key: 'way', label: 'Причина', options: ['Клиент передумал', 'Долгий срок доставки', 'Нашёл дешевле', 'Ошибка в заказе', 'Другое'], value: 'Клиент передумал'},
+		],
+	},
+	receipt: {
+		title:  'Отправить чек или дубликат',
+		note:   'Документ уйдёт на номер телефона или почту клиента из его карточки.',
+		fields: () => [
+			{key: 'order', label: 'Заказ', options: orderOptions.value, value: defaultOrder.value},
+			{key: 'way', label: 'Что отправить', options: ['Чек', 'Дубликат чека', 'Дубликат накладной'], value: 'Чек'},
+			{key: 'time', label: 'Куда', options: ['SMS', 'Email'], value: 'SMS'},
+		],
+	},
 };
 
 const config = computed(() => (store.actionType ? CONFIG[store.actionType] : null));
@@ -119,7 +137,7 @@ function confirm() {
 	<modal v-if="config" has-cross :size="SIZES.sm" @close="store.actionType = null">
 		<template #title>{{ config.title }}</template>
 
-		<div class="fields">
+		<div class="fields modal-body">
 			<form-select
 				v-for="f in fields"
 				:key="f.key"
@@ -144,11 +162,14 @@ function confirm() {
 	display:        flex;
 	flex-direction: column;
 	gap:            12px;
+
+	// Подвал с кнопками идёт следом — нижний отступ ему не нужен
+	padding-bottom: 0;
 }
 
 .note {
 	padding:       9px 12px;
-	font-size:     13px;
+	font-size:     14px;
 	line-height:   1.45;
 	color:         #1e3a8a;
 	background:    var(--crm-blue-bg);

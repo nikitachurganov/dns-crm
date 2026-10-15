@@ -170,11 +170,12 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 	display:    flex;
 	min-height: 0;
 	height:     60vh;
+	padding:    4px 20px 20px;
 
 	&__left {
 		flex:         none;
 		width:        290px;
-		padding:      6px 20px 0 4px;
+		padding:      6px 20px 0 0;
 		overflow-y:   auto;
 		border-right: 1px solid var(--crm-line);
 	}
@@ -191,7 +192,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 	&__sub {
 		margin-top: 3px;
-		font-size:  12px;
+		font-size:  14px;
 		color:      var(--crm-ink3);
 		text-align: center;
 	}
@@ -218,7 +219,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 .tag {
 	padding:       3px 8px;
-	font-size:     11px;
+	font-size:     14px;
 	font-weight:   700;
 	border-radius: 6px;
 
@@ -259,7 +260,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 	&__l {
 		margin-top:     2px;
-		font-size:      10px;
+		font-size:      14px;
 		letter-spacing: 0.3px;
 		color:          var(--crm-ink3);
 	}
@@ -267,7 +268,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 .sec {
 	margin:         18px 0 9px;
-	font-size:      11px;
+	font-size:      14px;
 	font-weight:    800;
 	letter-spacing: 0.8px;
 	color:          var(--crm-ink3);
@@ -278,7 +279,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 	justify-content: space-between;
 	gap:             10px;
 	padding:         5px 0;
-	font-size:       13px;
+	font-size:       14px;
 
 	&__k {
 		color: var(--crm-ink3);
@@ -348,13 +349,13 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 	&__dt {
 		flex:      none;
-		font-size: 12px;
+		font-size: 14px;
 		color:     var(--crm-ink3);
 	}
 
 	&__desc {
 		margin:      4px 0 0;
-		font-size:   13px;
+		font-size:   14px;
 		line-height: 1.45;
 		color:       var(--crm-ink2);
 	}
@@ -368,7 +369,7 @@ const visible = computed(() => events.value.filter((e) => 'all' === category.val
 
 	&__tag {
 		padding:       2px 7px;
-		font-size:     11px;
+		font-size:     14px;
 		color:         var(--crm-ink2);
 		border:        1px solid var(--crm-line);
 		border-radius: 6px;

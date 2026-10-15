@@ -57,14 +57,14 @@ const hover = ref(0);
 
 	&__head {
 		margin-bottom:  8px;
-		font-size:      11px;
+		font-size:      14px;
 		font-weight:    700;
 		letter-spacing: 0.6px;
 		color:          var(--crm-ink3);
 	}
 
 	&__q {
-		font-size:   15px;
+		font-size:   16px;
 		font-weight: 700;
 	}
 

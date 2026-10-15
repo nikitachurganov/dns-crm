@@ -44,41 +44,43 @@ function onDrop(event: DragEvent) {
 	<modal v-if="store.isCsvOpen" has-cross :size="SIZES.md" @close="store.isCsvOpen = false">
 		<template #title>Загрузка данных из базы (CSV)</template>
 
-		<div
-			class="drop"
-			:class="{'drop--hot': isHot}"
-			@click="input?.click()"
-			@dragover.prevent="isHot = true"
-			@dragleave="isHot = false"
-			@drop.prevent="onDrop"
-		>
-			Перетащите сюда CSV-файлы выгрузки<br>или <b>выберите файлы</b><br>
-			<span class="drop__hint">clients.csv · orders.csv · tickets.csv · chats.csv · messages.csv</span>
-		</div>
-		<input
-			ref="input"
-			type="file"
-			accept=".csv,text/csv"
-			multiple
-			hidden
-			@change="handle(input?.files ?? null)"
-		>
-
-		<div class="results">
-			<div v-for="(r, i) in store.csvResults" :key="i" class="file">
-				<span :class="r.type ? 'file__ok' : 'file__err'">{{ r.type ? '✓' : '✕' }}</span>
-				<span class="file__name">{{ r.fileName }}</span>
-				<span class="file__what">
-					<template v-if="r.type">{{ TYPE_RU[r.type] }} · {{ r.rows }} строк</template>
-					<template v-else-if="r.error">ошибка разбора</template>
-					<template v-else>не распознаны колонки</template>
-				</span>
+		<div class="modal-body csv">
+			<div
+				class="drop"
+				:class="{'drop--hot': isHot}"
+				@click="input?.click()"
+				@dragover.prevent="isHot = true"
+				@dragleave="isHot = false"
+				@drop.prevent="onDrop"
+			>
+				Перетащите сюда CSV-файлы выгрузки<br>или <b>выберите файлы</b><br>
+				<span class="drop__hint">clients.csv · orders.csv · tickets.csv · chats.csv · messages.csv</span>
 			</div>
-		</div>
+			<input
+				ref="input"
+				type="file"
+				accept=".csv,text/csv"
+				multiple
+				hidden
+				@change="handle(input?.files ?? null)"
+			>
 
-		<div class="note">
-			Тип файла определяется по заголовкам колонок, имя файла не важно. Можно загрузить только часть файлов —
-			остальные данные останутся прежними. Схему колонок смотрите в приложенных примерах.
+			<div class="results">
+				<div v-for="(r, i) in store.csvResults" :key="i" class="file">
+					<span :class="r.type ? 'file__ok' : 'file__err'">{{ r.type ? '✓' : '✕' }}</span>
+					<span class="file__name">{{ r.fileName }}</span>
+					<span class="file__what">
+						<template v-if="r.type">{{ TYPE_RU[r.type] }} · {{ r.rows }} строк</template>
+						<template v-else-if="r.error">ошибка разбора</template>
+						<template v-else>не распознаны колонки</template>
+					</span>
+				</div>
+			</div>
+
+			<div class="note">
+				Тип файла определяется по заголовкам колонок, имя файла не важно. Можно загрузить только часть файлов —
+				остальные данные останутся прежними. Схему колонок смотрите в приложенных примерах.
+			</div>
 		</div>
 
 		<template #footer="{close}">
@@ -91,9 +93,13 @@ function onDrop(event: DragEvent) {
 </template>
 
 <style scoped lang="scss">
+.csv {
+	padding-bottom: 0;
+}
+
 .drop {
 	padding:       26px 16px;
-	font-size:     14px;
+	font-size:     16px;
 	color:         var(--crm-ink2);
 	text-align:    center;
 	cursor:        pointer;
@@ -112,7 +118,7 @@ function onDrop(event: DragEvent) {
 	}
 
 	&__hint {
-		font-size: 12px;
+		font-size: 14px;
 		color:     var(--crm-ink3);
 	}
 }
@@ -129,7 +135,7 @@ function onDrop(event: DragEvent) {
 	gap:           9px;
 	align-items:   center;
 	padding:       8px 11px;
-	font-size:     13px;
+	font-size:     14px;
 	background:    var(--crm-bg);
 	border:        1px solid var(--crm-line);
 	border-radius: 9px;
@@ -146,12 +152,12 @@ function onDrop(event: DragEvent) {
 
 	&__name {
 		font-family: ui-monospace, Consolas, monospace;
-		font-size:   12px;
+		font-size:   14px;
 	}
 
 	&__what {
 		margin-left: auto;
-		font-size:   12px;
+		font-size:   14px;
 		color:       var(--crm-ink3);
 	}
 }
@@ -159,7 +165,7 @@ function onDrop(event: DragEvent) {
 .note {
 	padding:       9px 12px;
 	margin-top:    14px;
-	font-size:     13px;
+	font-size:     14px;
 	line-height:   1.45;
 	color:         #1e3a8a;
 	background:    var(--crm-blue-bg);

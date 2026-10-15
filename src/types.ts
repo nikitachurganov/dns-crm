@@ -31,6 +31,10 @@ export interface Order {
 	status: string;
 	delivery: string;
 	channel: string;
+	/** Адрес доставки; в старых выгрузках колонки может не быть */
+	address?: string;
+	/** Цены позиций через «;» в том же порядке, что и товары в items; нет — цена только у заказа из одного товара */
+	prices?: string;
 }
 
 /** Тикет (sub-чат) */
@@ -45,6 +49,12 @@ export interface Ticket {
 	operator: string;
 	csat: string;
 	fcr: string;
+	/** Приоритет: high — высокий, medium — средний, пусто — без приоритета (в старых выгрузках колонки может не быть) */
+	priority?: string;
+	/** Откуда пришло обращение: chat — чат на главной странице сайта, form — форма обратной связи (в старых выгрузках колонки может не быть — тогда чат) */
+	source?: string;
+	/** Тема обращения из категорий сайта (SITE_TOPICS); пока оператор не выбрал её, в шапке показывается краткая тема из topic */
+	site_topic?: string;
 	/** Оператор запросил подтверждение решения */
 	closureReq?: boolean;
 	/** Клиент ответил «Да» и оценивает работу */
@@ -70,6 +80,19 @@ export interface Message {
 	sender: string;
 	type: string;
 	text: string;
+	/** Оператор-автор: заполняется у сообщений прошлых операторов, у сообщений текущего пусто */
+	author?: string;
+	author_email?: string;
+	/** Превью вложения-изображения (type = attachment): ссылка на blob, есть только у файлов, отправленных в этой сессии */
+	preview?: string;
+	/** Id отправки: вложения, отправленные одним нажатием «Отправить», показываются одной группой плиток */
+	batch?: string;
+}
+
+/** Файл, отправляемый оператором: имя и превью, если это изображение */
+export interface OutgoingFile {
+	name: string;
+	previewUrl?: string;
 }
 
 /** Все таблицы выгрузки */
@@ -85,7 +108,10 @@ export type CsvType = keyof Db;
 
 export type ChatFilter = 'active' | 'waiting' | 'all';
 
-export type ActionType = 'return' | 'exchange' | 'warranty' | 'transfer' | 'service';
+/** Канал поступления тикета: чат на главной странице сайта или форма обратной связи */
+export type TicketSource = 'chat' | 'form';
+
+export type ActionType = 'return' | 'exchange' | 'warranty' | 'transfer' | 'service' | 'reschedule' | 'cancel' | 'receipt';
 
 export type ReplyTone = 'warm' | 'biz' | 'emp';
 

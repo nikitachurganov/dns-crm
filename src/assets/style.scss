@@ -17,9 +17,6 @@
 	--crm-blue:        var(--background-info-dark, #007de3);
 	--crm-blue-bg:     var(--background-info-light, #e9f6fc);
 	--crm-yellow-bg:   var(--background-warning-light, #fff7da);
-	--crm-ai:          var(--icon-info-purple, #733aff);
-	--crm-ai-bg:       #f4efff;
-	--crm-ai-line:     #e2d6fb;
 	--crm-star:        #f5a623;
 	--crm-radius:      12px;
 	--crm-shadow-lg:   0 20px 60px rgba(16, 24, 40, 0.25);
@@ -38,7 +35,7 @@ body,
 body {
 	margin:      0;
 	font-family: var(--font-family-paragraph-desktop, 'PT Sans'), sans-serif;
-	font-size:   14px;
+	font-size:   16px;
 	color:       var(--crm-ink);
 	background:  var(--crm-bg);
 	overflow:    hidden;
@@ -46,6 +43,11 @@ body {
 
 button {
 	font-family: inherit;
+}
+
+// Содержимое модалок: у Modal из ДС шапка и подвал с отступом 20px, а у самой области содержимого отступов нет
+.modal-body {
+	padding: 4px 20px 20px;
 }
 
 ::-webkit-scrollbar {

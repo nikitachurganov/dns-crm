@@ -45,6 +45,34 @@ export function longTime(ts?: string): string {
 	return t ? 'сегодня, ' + t : 'сегодня';
 }
 
+/** Дата «дд.мм.гггг» на день раньше */
+function prevDay(date: string): string {
+	const [d = 0, m = 0, y = 0] = date.split('.').map(Number);
+	const prev = new Date(y, m - 1, d - 1);
+
+	return `${String(prev.getDate()).padStart(2, '0')}.${String(prev.getMonth() + 1).padStart(2, '0')}.${prev.getFullYear()}`;
+}
+
+/**
+ * Подпись дня в ленте чата, как в Telegram: «Сегодня», «Вчера», «1 сентября»; для другого года — «1 сентября 2025»
+ *
+ * @param date Дата «дд.мм.гггг»
+ */
+export function dayLabel(date: string): string {
+	if (TODAY === date) {
+		return 'Сегодня';
+	}
+
+	if (prevDay(TODAY) === date) {
+		return 'Вчера';
+	}
+
+	const [d = '', m = '', y = ''] = date.split('.');
+	const label = `${Number(d)} ${MONTHS[Number(m)] ?? ''}`;
+
+	return y === TODAY.split('.')[2] ? label : `${label} ${y}`;
+}
+
 /** Ключ для сортировки по дате */
 export function dateKey(ts?: string): string {
 	const [d, m, y] = datePart(ts).split('.');
@@ -80,11 +108,17 @@ export function avatarColor(name?: string): string {
 	return AVATAR_COLORS[h % AVATAR_COLORS.length] ?? AVATAR_COLORS[0]!;
 }
 
-/** Текущее время во Владивостоке (GMT+10) в «сегодняшнем» дне */
-export function nowTs(): string {
-	const d = new Date(Date.now() + 10 * 3600e3);
+/** Начало демо-дня: все данные прототипа относятся к 10.07.2026, «сейчас» стартует с 15:00 и идёт дальше по реальным минутам */
+const DEMO_START_MINUTES = 15 * 60;
+const APP_STARTED_AT     = Date.now();
 
-	return `${TODAY} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+/** Текущее демо-время «дд.мм.гггг чч:мм»: фиксированный старт, чтобы цвета часов и время новых сообщений не зависели от времени суток */
+export function nowTs(): string {
+	const minutes = DEMO_START_MINUTES + Math.floor((Date.now() - APP_STARTED_AT) / 60000);
+	const hh      = Math.floor(minutes / 60) % 24;
+	const mm      = minutes % 60;
+
+	return `${TODAY} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 /** «03.2021» → «марта 2021» */

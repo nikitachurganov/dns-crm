@@ -1,7 +1,7 @@
-import {defineStore} from 'pinia';
+import {acceptHMRUpdate, defineStore} from 'pinia';
 import {computed, reactive, ref} from 'vue';
-import {DEMO_CSV} from '../data/demo';
-import type {ActionType, Chat, ChatFilter, Client, CsvType, Db, Intent, Message, Order, Ticket, ToastItem} from '../types';
+import {DEMO_CSV, DEMO_PREVIEWS} from '../data/demo';
+import type {ActionType, Chat, ChatFilter, Client, CsvType, Db, Intent, Message, Order, OutgoingFile, Ticket, TicketSource, ToastItem} from '../types';
 import {detectCsvType, parseCSV} from '../utils/csv';
 import {dateKey, firstName, nowTs} from '../utils/format';
 import {detectIntent} from '../utils/intent';
@@ -24,16 +24,38 @@ export interface ActionForm {
 
 const TABLES: CsvType[] = ['clients', 'orders', 'tickets', 'chats', 'messages'];
 
+/** Допустимые приоритеты тикета */
+const PRIORITIES = ['high', 'medium', 'low'];
+
+/** Текущий оператор: имя из шапки; приватные заметки хранятся под его именем и другим операторам не видны */
+export const CURRENT_OPERATOR = 'Анна К.';
+
 /** Хранилище CRM: данные выгрузки, выбранный чат/тикет и все действия оператора */
 export const useCrmStore = defineStore('crm', () => {
 	const db = reactive<Db>({clients: [], orders: [], tickets: [], chats: [], messages: []});
 
 	const chatId       = ref<string | null>(null);
 	const ticketId     = ref<string | null>(null);
-	const expanded     = reactive<Record<string, boolean>>({});
 	const filter       = ref<ChatFilter>('active');
+	/** Строка поиска по людям и тикетам */
+	const search       = ref('');
+	/** Фильтр списка тикетов по каналу: всегда выбран один из двух — чат на сайте или форма обратной связи */
+	const ticketSource = ref<TicketSource>('chat');
+	/** Левая колонка свёрнута до столбца аватаров */
+	const isQueueCollapsed = ref(false);
+	/** Чат, у которого открыта панель с тикетами (как топики в Telegram); не зависит от того, какой чат открыт в диалоге */
+	const panelChatId   = ref<string | null>(null);
 	const draft        = ref('');
-	const toasts       = ref<ToastItem[]>([]);
+	/** Правая панель с деталями обращения: по умолчанию закрыта, открывается стрелкой у края шапки чата */
+	const isDetailsOpen = ref(false);
+	/** Открыто окно с заметкой к текущему тикету */
+	const isNoteOpen    = ref(false);
+	const isTopicOpen   = ref(false);
+	/** Приватные заметки оператора к тикетам: ключ «оператор|тикет», одна заметка на тикет, клиенту не уходят */
+	const notes        = reactive<Record<string, string>>({});
+	/** Кто и когда последним правил заметку: «дд.мм.гггг чч:мм» */
+	const noteMeta     = reactive<Record<string, {editor: string; ts: string}>>({});
+	const toasts      = ref<ToastItem[]>([]);
 	const actionType   = ref<ActionType | null>(null);
 	const client360Id  = ref<string | null>(null);
 	const isCsvOpen    = ref(false);
@@ -73,6 +95,19 @@ export const useCrmStore = defineStore('crm', () => {
 	const ticket  = computed(() => ticketById(ticketId.value));
 	const isClosed = computed(() => 'решено' === ticket.value?.status);
 
+	/** Активный заказ: привязанный к открытому обращению, иначе проблемный, иначе самый свежий */
+	const activeOrder = computed<Order | undefined>(() => {
+		if (!chat.value) {
+			return undefined;
+		}
+
+		const all = ordersSorted(chat.value.client_id);
+
+		return all.find((o) => o.order_id === ticket.value?.order_id)
+			?? all.find((o) => 'проблема' === o.status)
+			?? all[0];
+	});
+
 	/** Намерение клиента по сообщениям выбранного тикета */
 	const intent = computed<Intent | null>(() => {
 		if (!chat.value) {
@@ -92,11 +127,52 @@ export const useCrmStore = defineStore('crm', () => {
 	});
 
 	/** Чаты очереди с учётом фильтра и поиска */
+	/** Подходит ли тикет под поисковый запрос: тема, номер тикета, номер заказа, текст сообщений */
+	function ticketMatches(t: Ticket, q: string) {
+		return t.topic.toLowerCase().includes(q)
+			|| t.ticket_id.includes(q)
+			|| t.order_id.toLowerCase().includes(q)
+			|| messagesOf(t.ticket_id).some((m) => m.text.toLowerCase().includes(q));
+	}
+
+	/** Подходит ли сам человек под запрос: имя, ID, телефон, почта */
+	function clientMatches(cl: Client | undefined, q: string) {
+		return !!cl && (cl.name.toLowerCase().includes(q) || cl.client_id.includes(q) || cl.phone.replace(/\s/g, '').includes(q.replace(/\s/g, '')) || cl.email.toLowerCase().includes(q));
+	}
+
+	const searchQuery = computed(() => search.value.trim().toLowerCase());
+
+	/** Канал тикета: всё, что не пришло с формы, считаем чатом (в старых выгрузках колонки нет) */
+	const sourceOf = (t: Ticket): TicketSource => ('form' === t.source ? 'form' : 'chat');
+
+	/** Тикеты клиента для панели: при поиске по тикетам — только подходящие, если сам человек под запрос не подходит */
+	function ticketsForPanel(cid: string) {
+		const all = ticketsSorted(cid);
+		const q   = searchQuery.value;
+
+		if (!q || clientMatches(clientById(cid), q)) {
+			return all;
+		}
+
+		const found = all.filter((t) => ticketMatches(t, q));
+
+		return found.length ? found : all;
+	}
+
 	const queue = computed(() => {
 		let chats = db.chats.slice();
 
-		if ('all' !== filter.value) {
-			chats = chats.filter((c) => c.status === filter.value);
+		// «Архив» — люди, у которых все тикеты закрыты; «Активные» и «Новые» — только люди с открытыми тикетами
+		chats = chats.filter((c) => {
+			const hasOpen = ticketsOf(c.client_id).some((t) => 'решено' !== t.status);
+
+			return 'all' === filter.value ? !hasOpen : hasOpen && c.status === filter.value;
+		});
+
+		const q = searchQuery.value;
+
+		if (q) {
+			chats = chats.filter((c) => clientMatches(clientOfChat(c), q) || ticketsOf(c.client_id).some((t) => ticketMatches(t, q)));
 		}
 
 		return chats.sort((a, b) => dateKey(lastMessage(b.client_id)?.ts).localeCompare(dateKey(lastMessage(a.client_id)?.ts)));
@@ -123,8 +199,7 @@ export const useCrmStore = defineStore('crm', () => {
 	}
 
 	function selectChat(id: string) {
-		chatId.value    = id;
-		expanded[id]    = true;
+		chatId.value = id;
 
 		const c = chatById(id);
 
@@ -134,6 +209,29 @@ export const useCrmStore = defineStore('crm', () => {
 		}
 	}
 
+	/** Свернуть открытый чат: диалог закрывается, остаётся заглушка «Чат не выбран» */
+	function closeChat() {
+		chatId.value    = null;
+		ticketId.value  = null;
+		isDetailsOpen.value = false;
+	}
+
+	/** Клик по клиенту в списке: открывает панель с его тикетами, диалог не меняется */
+	function openPanel(id: string) {
+		panelChatId.value = id;
+	}
+
+	function closePanel() {
+		panelChatId.value = null;
+	}
+
+	/** Свернуть левую колонку до столбца аватаров или развернуть обратно */
+	function toggleQueue() {
+		isQueueCollapsed.value = !isQueueCollapsed.value;
+		panelChatId.value      = null;
+	}
+
+	/** Клик по тикету: открывает диалог по этому тикету */
 	function selectSub(cid: string, tid: string) {
 		chatId.value   = cid;
 		ticketId.value = tid;
@@ -145,31 +243,34 @@ export const useCrmStore = defineStore('crm', () => {
 		}
 	}
 
-	function toggleExpanded(id: string) {
-		expanded[id] = !expanded[id];
+	// ---------- данные ----------
+	/** У каждого тикета есть приоритет: если в выгрузке он не указан или неизвестен, это низкий */
+	function normalizePriorities() {
+		for (const t of db.tickets) {
+			if (!PRIORITIES.includes(t.priority ?? '')) {
+				t.priority = 'low';
+			}
+		}
 	}
 
-	// ---------- данные ----------
 	function loadDemo() {
 		for (const table of TABLES) {
 			(db[table] as unknown[]) = parseCSV(DEMO_CSV[table] ?? '');
 		}
+		normalizePriorities();
+
+		for (const m of db.messages) {
+			m.preview = DEMO_PREVIEWS[m.message_id];
+		}
+
 		resetSelection();
 	}
 
 	function resetSelection() {
-		const first = db.chats[0];
-
-		chatId.value = first?.chat_id ?? null;
-
-		for (const key of Object.keys(expanded)) {
-			delete expanded[key];
-		}
-
-		if (first) {
-			expanded[first.chat_id] = true;
-			setActiveTicket(first.client_id);
-		}
+		// Чат не выбран: оператор видит заглушку «Выберите чат», пока сам не откроет диалог
+		chatId.value      = null;
+		ticketId.value    = null;
+		panelChatId.value = null;
 	}
 
 	function restoreDemo() {
@@ -192,15 +293,16 @@ export const useCrmStore = defineStore('crm', () => {
 
 				if (type) {
 					(db[type] as unknown[]) = rows;
+					normalizePriorities();
 					loadedFiles.value++;
 
-					if (!chatById(chatId.value)) {
-						chatId.value = db.chats[0]?.chat_id ?? null;
-					}
-
+					// Выбранный чат пропал из новой выгрузки — возвращаемся к заглушке
 					const c = chatById(chatId.value);
 
-					if (c && !ticketById(ticketId.value)) {
+					if (!c) {
+						chatId.value   = null;
+						ticketId.value = null;
+					} else if (!ticketById(ticketId.value)) {
 						setActiveTicket(c.client_id);
 					}
 				}
@@ -213,8 +315,8 @@ export const useCrmStore = defineStore('crm', () => {
 	}
 
 	// ---------- сообщения ----------
-	function pushMessage(sender: string, type: string, text: string, tid = ticketId.value) {
-		db.messages.push({message_id: String(++msgSeq), ticket_id: tid ?? '', ts: nowTs(), sender, type, text});
+	function pushMessage(sender: string, type: string, text: string, tid = ticketId.value, extra: Pick<Message, 'preview' | 'batch'> = {}) {
+		db.messages.push({message_id: String(++msgSeq), ticket_id: tid ?? '', ts: nowTs(), sender, type, text, ...extra});
 	}
 
 	/** Системное сообщение о выполненном действии в текущем тикете */
@@ -222,16 +324,70 @@ export const useCrmStore = defineStore('crm', () => {
 		pushMessage('system', 'action', text);
 	}
 
-	function send() {
+	/**
+	 * Отправка сообщения оператора: сначала вложения, затем текст
+	 *
+	 * @param files Прикреплённые файлы: имя и превью изображения
+	 */
+	function send(files: OutgoingFile[] = []) {
 		const text = draft.value.trim();
 		const t    = ticket.value;
 
-		if (!text || !t || 'решено' === t.status) {
+		if ((!text && !files.length) || !t || 'решено' === t.status) {
 			return;
 		}
 
-		pushMessage('operator', 'text', text);
+		// Файлы одной отправки получают общий id, чтобы в ленте они шли одной группой, а отдельные отправки не сливались
+		const batch = `b${++msgSeq}`;
+
+		for (const file of files) {
+			pushMessage('operator', 'attachment', file.name, t.ticket_id, {preview: file.previewUrl, batch});
+		}
+
+		if (text) {
+			pushMessage('operator', 'text', text);
+		}
+
 		draft.value = '';
+	}
+
+	// ---------- приватные заметки ----------
+	const noteKey = (tid: string) => `${CURRENT_OPERATOR}|${tid}`;
+
+	/** Заметка текущего оператора к тикету; чужие заметки сюда не попадают по ключу */
+	const noteOf = (tid: string | null) => (tid ? notes[noteKey(tid)] ?? '' : '');
+
+	/** Последний редактор заметки и время правки; пусто, пока заметки нет */
+	const noteMetaOf = (tid: string | null) => (tid ? noteMeta[noteKey(tid)] : undefined);
+
+	/** Сохраняет заметку и запоминает, кто и когда её правил; пустая заметка удаляется, и тег в ленте снова серый */
+	function setNote(tid: string | null, text: string) {
+		if (!tid) {
+			return;
+		}
+
+		const value = text.trim();
+
+		if (value) {
+			notes[noteKey(tid)]    = value;
+			noteMeta[noteKey(tid)] = {editor: CURRENT_OPERATOR, ts: nowTs()};
+		} else {
+			delete notes[noteKey(tid)];
+			delete noteMeta[noteKey(tid)];
+		}
+	}
+
+	// ---------- тема обращения ----------
+	/** Меняет тему обращения на одну из категорий сайта */
+	function setTopic(tid: string | null, topic: string) {
+		const t = ticketById(tid);
+
+		if (!t || 'решено' === t.status || t.site_topic === topic) {
+			return;
+		}
+
+		t.site_topic = topic;
+		toast(`Тема обращения изменена: «${topic}»`, 'ok');
 	}
 
 	// ---------- закрытие тикета клиентом ----------
@@ -281,6 +437,9 @@ export const useCrmStore = defineStore('crm', () => {
 			case 'warranty':
 			case 'transfer':
 			case 'service':
+			case 'reschedule':
+			case 'cancel':
+			case 'receipt':
 				actionType.value = id;
 				break;
 			case 'merch':
@@ -336,6 +495,24 @@ export const useCrmStore = defineStore('crm', () => {
 
 			systemAction(`✅ Возврат RMA-10${c.chat_id.slice(-4)} оформлен по заказу ${order?.order_id ?? form.orderId}. Курьер заберёт технику ${form.time.toLowerCase()}. Деньги вернутся в течение 5 дней после приёмки.`);
 			toast(`Возврат оформлен. Клиент ${firstName(client.value?.name)} видит статус у себя в приложении`, 'ok');
+		} else if ('reschedule' === type) {
+			systemAction(`📅 Доставка заказа ${form.orderId} перенесена: ${form.way}, ${form.time}. Клиент получил уведомление.`);
+			toast('Дата доставки изменена', 'ok');
+		} else if ('cancel' === type) {
+			const order = db.orders.find((o) => o.order_id === form.orderId);
+
+			if (order) {
+				order.status = 'отменён';
+			}
+
+			systemAction(`🚫 Заказ ${form.orderId} отменён. Причина: ${form.way.toLowerCase()}. Деньги вернутся в течение 5 рабочих дней.`);
+			toast(`Заказ ${form.orderId} отменён`, 'ok');
+		} else if ('receipt' === type) {
+			const cl     = client.value;
+			const target = 'SMS' === form.time ? cl?.phone : cl?.email;
+
+			systemAction(`🧾 ${form.way} по заказу ${form.orderId} отправлен по ${form.time}: ${target ?? ''}.`);
+			toast(`${form.way} отправлен по ${form.time}`, 'ok');
 		} else if ('transfer' === type) {
 			systemAction(`🔀 Чат переведён: ${form.way}. Приоритет: ${form.time.toLowerCase()}. История переписки передана.`);
 			toast(`Чат переведён: ${form.way}`, 'ok');
@@ -354,11 +531,16 @@ export const useCrmStore = defineStore('crm', () => {
 	loadDemo();
 
 	return {
-		db, chatId, ticketId, expanded, filter, draft, toasts, actionType, client360Id, isCsvOpen, csvResults, loadedFiles,
-		chat, client, ticket, isClosed, intent, queue,
-		clientById, chatById, ticketById, clientOfChat, messagesOf, ordersOf, ticketsOf, ordersSorted, ticketsSorted, lastMessage,
-		toast, dismissToast, selectChat, selectSub, toggleExpanded, setActiveTicket,
+		db, chatId, ticketId, panelChatId, filter, ticketSource, search, isQueueCollapsed, draft, isDetailsOpen, isNoteOpen, isTopicOpen, toasts, actionType, client360Id, isCsvOpen, csvResults, loadedFiles,
+		chat, client, ticket, isClosed, activeOrder, intent, queue,
+		clientById, chatById, ticketById, clientOfChat, messagesOf, noteOf, noteMetaOf, setNote, setTopic, ordersOf, ticketsOf, ordersSorted, ticketsSorted, lastMessage,
+		toast, dismissToast, selectChat, closeChat, selectSub, openPanel, closePanel, toggleQueue, ticketsForPanel, sourceOf, setActiveTicket,
 		loadDemo, restoreDemo, loadCsvFiles,
 		send, requestClosure, clientSaysYes, clientSaysNo, closeTicket, runAction, confirmAction,
 	};
 });
+
+// Горячая замена хранилища в dev: без неё компоненты получают новый код, а стор остаётся старым, и сигнатуры методов расходятся
+if (import.meta.hot) {
+	import.meta.hot.accept(acceptHMRUpdate(useCrmStore, import.meta.hot));
+}
